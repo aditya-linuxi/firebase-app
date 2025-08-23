@@ -10,8 +10,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import * as fs from 'fs';
-import {Readable } from 'stream';
 import { MediaPart } from 'genkit';
 
 const GenerateVideoInputSchema = z.object({
@@ -87,8 +85,21 @@ const generateVideoFlow = ai.defineFlow(
       throw new Error('Failed to find the generated video');
     }
 
-    // Temporary workaround since downloading videos doesn't work in the server environment.
-    // Return the media URL to be downloaded client-side.
-    return {videoUri: video.media!.url};
+    const fetch = (await import('node-fetch')).default;
+    const videoDownloadResponse = await fetch(
+      `${video.media!.url}&key=${process.env.GEMINI_API_KEY}`
+    );
+    if (
+      !videoDownloadResponse ||
+      videoDownloadResponse.status !== 200 ||
+      !videoDownloadResponse.body
+    ) {
+      throw new Error('Failed to fetch video');
+    }
+
+    const videoBuffer = await videoDownloadResponse.arrayBuffer();
+    const base64Video = Buffer.from(videoBuffer).toString('base64');
+    
+    return {videoUri: `data:video/mp4;base64,${base64Video}`};
   }
 );
